@@ -144,7 +144,7 @@ pointing to the root folder with the uCO3D dataset.
     gaussian_splats = frame_data.sequence_gaussian_splats
     # render the scene gaussian splats into the camera of the loaded frame
     # NOTE: This requires the 'gsplat' library. You can install it with:
-    #        > pip install git+https://github.com/nerfstudio-project/gsplat.git
+    #        > pip install git+https://github.com/nerfstudio-project/gsplat.git@v1.3.0
     from uco3d import render_splats
     render_colors, render_alphas, render_info = render_splats(
         cameras=frame_data.camera,
@@ -214,8 +214,8 @@ Note that, differently from CO3Dv2, the frame-level data such as images or depth
 Each sequence-specific folder `<super_category>/<category>/<sequence_name>` contains the following files:
 - **`rgb_video.mp4`** : The original crowd-sourced video capturing the object from the visual category `<category>` and super-category `<super_category>`.
 - **`mask_video.mkv`** : Segmentation video of the same length as `rgb_video.mp4` containing the video-segmentation of the foreground object. The latter was obtained using `LangSAM` in combination with a video segmentation refiner based on `XMem`.
-- **`depth_maps.h5`** : `hdf5` file containing a depth map for each of the 200 frames sampled equidistantly from the input video. We first run `DepthAnythingV2` and align the result depth map's scale with the scene sparse point cloud from `sparse_point_cloud.ply`. Hence, the depth maps have a consistent scale within each scene.
-- **`gaussian_splats`** : 3D Gaussian Splat reconstruction of the scene obtained with the `gsplat` library. The splats are compressed using the standard `gsplat` compression method which sorts the gaussians using [Self-Organizing Gaussian Grids](https://arxiv.org/pdf/2312.13299) followed by `png` compression.
+- **`depth_maps.h5`** : `hdf5` file containing a depth map for each of the 200 frames sampled equidistantly from the input video. We first run `DepthAnythingV2` and align the result depth map's scale with the scene sparse point cloud from `sparse_point_cloud.ply`. Hence, the depth maps have a consistent scale within each scene, although they do not achieve strict pixel-wise consistency across multiple views. We are working on improving this and should provide more consistent depth maps in the future.
+- **`gaussian_splats`** : 3D Gaussian Splat reconstruction of the scene obtained with the `gsplat` library (v1.3.0). The splats are compressed using the standard `gsplat` compression method which sorts the gaussians using [Self-Organizing Gaussian Grids](https://arxiv.org/pdf/2312.13299) followed by `png` compression.
 - **`point_cloud.ply`** : A dense colored 3D pointcloud reconstructing the scene. Obtained using [VGGSfM](https://github.com/facebookresearch/vggsfm).
 - **`segmented_point_cloud.ply`** : Same as `point_cloud.ply` but restricted only to points covering the foreground object.
 - **`sparse_point_cloud.ply`** : Sparse geometrically-accurate scene pointcloud used to reconstruct the scene cameras. Obtained using [VGGSfM](https://github.com/facebookresearch/vggsfm).
@@ -253,13 +253,13 @@ R, tvec, camera_matrix = opencv_cameras_projection_from_uco3d(
 
 ### 3D Gaussian Splat convention
 
-uCO3D also contains 3D Gaussian Splat (3DGS) reconstructions in each folder. Here, our Gaussian Splat reconstructions were obtained using [`gsplat`](https://github.com/nerfstudio-project/gsplat). `gsplat` is an optional dependency that allows fast rendering of the provided 3DGS reconstructions.
+uCO3D also contains 3D Gaussian Splat (3DGS) reconstructions in each folder. Here, our Gaussian Splat reconstructions were obtained using [`gsplat`](https://github.com/nerfstudio-project/gsplat) (v1.3.0). `gsplat` is an optional dependency that allows fast rendering of the provided 3DGS reconstructions.
 
 #### Installing `gsplat`
 
 The easiest way to install the supported version of `gsplat` is to use `pip+git`:
 ```bash
-pip install git+https://github.com/nerfstudio-project/gsplat.git
+pip install git+https://github.com/nerfstudio-project/gsplat.git@v1.3.0
 ```
 
 #### Rendering with `gsplat`
