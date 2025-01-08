@@ -20,5 +20,9 @@ setup(
         "matplotlib",
         "plyfile",
         "h5py",
+        "imageio",
+        "opencv-python",
+        "omegaconf",
+        "scipy",
     ],
 )
