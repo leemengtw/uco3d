@@ -59,7 +59,7 @@ def build_arg_parser(
         "--download_small_subset",
         action="store_true",
         default=False,
-        help="Download only a small debug subset of 50 videos from the full dataset.",
+        help="Download only a small debug subset of 52 videos from the full dataset.",
     )
     parser.add_argument(
         "--download_super_categories",
