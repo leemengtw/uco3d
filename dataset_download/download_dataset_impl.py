@@ -16,7 +16,7 @@ import random
 import hashlib
 import copy
 
-from typing import List, Optional, Tuple
+from typing import List, Optional
 from multiprocessing import Pool
 from multiprocessing.dummy import Pool as SerialPool
 from tqdm import tqdm

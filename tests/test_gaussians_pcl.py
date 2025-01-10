@@ -249,12 +249,11 @@ class TestGaussiansPCL(unittest.TestCase):
 
     def test_visualize_pcl_reprojection(
         self,
-        output_videos: bool = True,
+        output_videos: bool = False,
     ):
         """
         Visualise the reprojection of the point clouds on the image.
         """
-        print("!!! DO NOT COMMIT THIS !!!")
         dataset = get_all_load_dataset(
             frame_data_builder_kwargs=dict(
                 apply_alignment=True,
@@ -262,10 +261,6 @@ class TestGaussiansPCL(unittest.TestCase):
                 box_crop=True,
                 box_crop_context=0.3,
             ),
-            set_lists_file_name="set_lists_all-categories.sqlite",
-            dataset_kwargs=dict(
-                subsets=["example"],
-            )
         )
         seq_names = list(dataset.sequence_names())[:3]
         for seq_name in seq_names:
