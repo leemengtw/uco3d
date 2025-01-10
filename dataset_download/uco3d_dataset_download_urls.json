@@ -6,6 +6,12 @@
             "file_size_bytes": 3672521544,
             "download_url": "https://scontent.xx.fbcdn.net/m1/v/t6/An-0ysc8dHcmfSBGY-P1CcEiecNXkqh3C02WSYvZfHIU9MhzjGhpFc8kGLnDfHvz2eiREO0.zip/metadata.zip?ccb=10-5&oh=00_AYCFUvgK5x78yY6VVsT52B5ILL54BZQOdZsNGYi5hOQ2lg&oe=679147FD&_nc_sid=636c42"
         },
+        "examples.zip": {
+            "filename": "examples.zip",
+            "sha256sum": "d203f10a9debf205cc708a8429ff7c2f1d802cbc2234a2e5096003d7dda64001",
+            "file_size_bytes": 9357019517,
+            "download_url": "/Users/davidnovotny/data/uco3d_examples_v2.zip"
+        },
         "part_depth_maps_0001.zip": {
             "filename": "part_depth_maps_0001.zip",
             "sha256sum": "e8f547f5246712e8c757291197e258046d61c6b4db7526af53d7756ec1212a94",

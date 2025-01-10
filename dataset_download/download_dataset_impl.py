@@ -25,23 +25,27 @@ from tqdm import tqdm
 BLOCKSIZE = 65536  # for sha256 computation
 
 
+DEFAULT_DOWNLOAD_MODALITIES = [
+    "metadata",
+    # "depth_maps",   # by default we do not download depth maps!
+    "rgb_videos",
+    "mask_videos",
+    "gaussian_splats",
+    "point_clouds",
+    "sparse_point_clouds",
+    "segmented_point_clouds",
+]
+
+
 def download_dataset(
     category_to_archives_file: str,
     link_list_file: str,
     download_folder: str,
     n_download_workers: int = 4,
     n_extract_workers: int = 4,
+    download_small_subset: bool = False,
     download_super_categories: Optional[List[str]] = None,
-    download_modalities: Optional[List[str]] = [
-        "metadata",
-        # "depth_maps",   # by default we do not download depth maps!
-        "rgb_videos",
-        "mask_videos",
-        "gaussian_splats",
-        "point_clouds",
-        "sparse_point_clouds",
-        "segmented_point_clouds",
-    ],
+    download_modalities: Optional[List[str]] = DEFAULT_DOWNLOAD_MODALITIES,
     checksum_check: bool = False,
     clear_archives_after_unpacking: bool = False,
     skip_downloaded_archives: bool = True,
@@ -62,6 +66,10 @@ def download_dataset(
             for downloading the dataset files.
         n_extract_workers: The number of parallel workers
             for extracting the dataset files.
+        download_small_subset: Download only a small debug subset of 50 videos with
+            including all available modalities and supercategories.
+            As such, cannot be used together with setting
+            `download_super_categories` or `download_modalities`.
         download_super_categories: A list of super categories to download.
             If `None`, downloads all.
         download_modalities: A list of modalities to download.
@@ -92,6 +100,23 @@ def download_dataset(
             "Please specify `download_folder` with a valid path to a target folder"
             + " for downloading the dataset."
             + f" {download_folder} does not exist."
+        )
+
+    if download_small_subset and download_super_categories is not None:
+        raise ValueError(
+            "The `download_small_subset` flag cannot be used together with"
+            + " `download_super_categories`."
+        )
+        
+    if (
+        download_small_subset 
+        and (download_modalities is not None)
+        and (set(download_modalities)!=set(DEFAULT_DOWNLOAD_MODALITIES))
+    ):
+        warnings.warn(
+            "The `download_small_subset` flag is set, but `download_modalities`"
+            + " is not None or does not match the default modalities."
+            + " The `download_modalities` flag will be ignored."
         )
 
     # read the links file
@@ -147,19 +172,22 @@ def download_dataset(
 
     # determine links to files we want to download
     data_links = []
-    actual_download_supercategories_modalities = set()
-    for modality, modality_links in category_to_archives.items():
-        if modality == "metadata":
-            assert isinstance(modality_links, dict)
-            _add_to_data_links(data_links, modality_links)
-            continue
-        for super_category, super_category_links in modality_links.items():
-            if _is_for_download(modality, super_category):
-                actual_download_supercategories_modalities.add(
-                    f"{modality}/{super_category}"
-                )
-                for link_name, link_data in super_category_links.items():
-                    _add_to_data_links(data_links, link_data)
+    if download_small_subset:
+        _add_to_data_links(data_links, category_to_archives["examples"])
+    else:
+        actual_download_supercategories_modalities = set()
+        for modality, modality_links in category_to_archives.items():
+            if modality == "metadata":
+                assert isinstance(modality_links, dict)
+                _add_to_data_links(data_links, modality_links)
+                continue
+            for super_category, super_category_links in modality_links.items():
+                if _is_for_download(modality, super_category):
+                    actual_download_supercategories_modalities.add(
+                        f"{modality}/{super_category}"
+                    )
+                    for link_name, link_data in super_category_links.items():
+                        _add_to_data_links(data_links, link_data)
 
     # for modality_super_category in sorted(
     #     actual_download_supercategories_modalities

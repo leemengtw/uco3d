@@ -56,6 +56,12 @@ def build_arg_parser(
         help="The number of parallel workers for extracting the dataset files.",
     )
     parser.add_argument(
+        "--download_small_subset",
+        action="store_true",
+        default=False,
+        help="Download only a small debug subset of 50 videos from the full dataset.",
+    )
+    parser.add_argument(
         "--download_super_categories",
         type=lambda x: [x_.strip() for x_ in x.split(",")],
         default=None,
@@ -128,6 +134,7 @@ if __name__ == "__main__":
         n_extract_workers=int(args.n_extract_workers),
         download_super_categories=args.download_super_categories,
         download_modalities=args.download_modalities,
+        download_small_subset=bool(args.download_small_subset),
         checksum_check=bool(args.checksum_check),
         clear_archives_after_unpacking=bool(args.clear_archives_after_unpacking),
         skip_downloaded_archives=not bool(args.redownload_existing_archives),
