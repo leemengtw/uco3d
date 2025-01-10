@@ -66,7 +66,7 @@ def download_dataset(
             for downloading the dataset files.
         n_extract_workers: The number of parallel workers
             for extracting the dataset files.
-        download_small_subset: Download only a small debug subset of 50 videos with
+        download_small_subset: Download only a small debug subset of 52 videos with
             including all available modalities and supercategories.
             As such, cannot be used together with setting
             `download_super_categories` or `download_modalities`.
