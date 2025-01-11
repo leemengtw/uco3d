@@ -83,10 +83,29 @@ def download_dataset(
             files do not match the expected ones.
     """
 
-    if not os.path.isfile(link_list_file):
+    if not os.path.isdir(download_folder):
+        raise ValueError(
+            "Please specify `download_folder` with a valid path to a target folder"
+            + " for downloading the dataset."
+            + f" {download_folder} does not exist."
+        )
+
+    if link_list_file.startswith("http"):
+        # download the link list file
+        print(f"Downloading link list file {link_list_file}.")
+        link_list_file_local = os.path.join(
+            download_folder, "uco3d_dataset_download_urls.json"
+        )
+        _download_with_progress_bar(
+            link_list_file, link_list_file_local, "uco3d_dataset_download_urls.json",
+            quiet=True,
+        )
+        link_list_file = link_list_file_local
+
+    elif not os.path.isfile(link_list_file):
         raise ValueError(
             "Please specify `link_list_file` with a valid path to a json"
-            " with zip file download links."
+            " with download links to the uco3d zip files."
         )
 
     if not os.path.isfile(category_to_archives_file):
@@ -95,29 +114,20 @@ def download_dataset(
             " with mapping between dataset categories and archive filenames."
         )
 
-    if not os.path.isdir(download_folder):
-        raise ValueError(
-            "Please specify `download_folder` with a valid path to a target folder"
-            + " for downloading the dataset."
-            + f" {download_folder} does not exist."
-        )
-
-    if download_small_subset and download_super_categories is not None:
-        raise ValueError(
-            "The `download_small_subset` flag cannot be used together with"
-            + " `download_super_categories`."
-        )
-        
-    if (
-        download_small_subset 
-        and (download_modalities is not None)
-        and (set(download_modalities)!=set(DEFAULT_DOWNLOAD_MODALITIES))
-    ):
-        warnings.warn(
-            "The `download_small_subset` flag is set, but `download_modalities`"
-            + " is not None or does not match the default modalities."
-            + " The `download_modalities` flag will be ignored."
-        )
+    if download_small_subset:
+        if download_super_categories is not None:
+            raise ValueError(
+                "The `download_small_subset` flag cannot be used together with"
+                + " `download_super_categories`."
+            )
+        if (download_modalities is not None) and (
+            set(download_modalities) != set(DEFAULT_DOWNLOAD_MODALITIES)
+        ):
+            warnings.warn(
+                "The `download_small_subset` flag is set, but `download_modalities`"
+                + " is not None or does not match the default modalities."
+                + " The `download_modalities` flag will be ignored."
+            )
 
     # read the links file
     with open(link_list_file, "r") as f:
@@ -328,7 +338,7 @@ def _download_file(
     return link_name, True
 
 
-def _download_with_progress_bar(url: str, fname: str, filename: str):
+def _download_with_progress_bar(url: str, fname: str, filename: str, quiet: bool = False):
     # taken from https://stackoverflow.com/a/62113293/986477
     if not url.startswith("http"):
         # url is in fact a local path, so we copy to the download folder
@@ -348,7 +358,7 @@ def _download_with_progress_bar(url: str, fname: str, filename: str):
         for datai, data in enumerate(resp.iter_content(chunk_size=1024)):
             size = file.write(data)
             bar.update(size)
-            if datai % max((max(total // 1024, 1) // 20), 1) == 0:
+            if (not quiet) and (datai % max((max(total // 1024, 1) // 20), 1) == 0):
                 print(
                     f"{filename}: Downloaded {100.0*(float(bar.n)/max(total, 1)):3.1f}%."
                 )

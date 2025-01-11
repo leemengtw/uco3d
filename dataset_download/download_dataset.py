@@ -11,10 +11,7 @@ from argparse import ArgumentParser
 from download_dataset_impl import download_dataset
 
 
-DEFAULT_LINK_LIST_FILE = os.path.join(
-    os.path.dirname(__file__),
-    "uco3d_dataset_download_urls.json",
-)
+DEFAULT_LINK_LIST_FILE = "https://raw.githubusercontent.com/uco3d/uco3d.github.io/refs/heads/main/links/uco3d_dataset_download_urls.json"
 DEFAULT_CATEGORY_TO_ARCHIVES_FILE = os.path.join(
     os.path.dirname(__file__),
     "category_to_archives.json",
@@ -95,14 +92,7 @@ def build_arg_parser(
         default=False,
         help="Check the SHA256 checksum of each downloaded file before extraction.",
     )
-    parser.add_argument(
-        "--no_checksum_check",
-        action="store_false",
-        dest="checksum_check",
-        default=True,
-        help="Does not check the SHA256 checksum of each downloaded file before extraction.",
-    )
-    parser.set_defaults(checksum_check=True)
+    parser.set_defaults(checksum_check=False)
     parser.add_argument(
         "--clear_archives_after_unpacking",
         action="store_true",

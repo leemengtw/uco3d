@@ -128,11 +128,11 @@ def _test_iterate_dataset(
                 for modality, load_switch in modality_to_load_switch.items()
             },
         },
-        set_lists_file_name = (
+        set_lists_file_name=(
             "set_lists_all-categories.sqlite"
             if download_small_subset
             else "set_lists_3categories-debug.sqlite"
-        )
+        ),
     )
     load_idx = [random.randint(0, len(dataset)) for i in range(20)]
     for i in load_idx:
@@ -187,7 +187,7 @@ def _run_one_download(
                 download_folder,
                 "--checksum_check",
                 "--clear_archives_after_unpacking",
-                # "--redownload_existing_archives",
+                "--redownload_existing_archives",
                 "--n_download_workers",
                 str(int(n_download_workers)),
                 "--n_extract_workers",
@@ -216,7 +216,7 @@ def _run_one_download(
                 "download_modalities",
                 download_modalities,
             )
-            
+
             if download_small_subset:
                 cmd.append("--download_small_subset")
 
@@ -318,7 +318,7 @@ def _run_one_download(
 
 _run_one_download(
     zipfiles_folder=None,
-    download_folder="/Users/davidnovotny/data/uco3d_examples_download_test",
+    download_folder="/Users/davidnovotny/data/uco3d_examples_download_test_v2",
     category_to_archives_file=None,
     link_list_file=None,
     download_small_subset=True,

@@ -17,17 +17,17 @@ def main():
         dataset_kwargs={"subsets": ["train"]},
         set_lists_file_name="set_lists_all-categories.sqlite",
     )
-    
+
     print("Randomly iterating over dataset")
     idx = torch.randperm(len(dataset))[:400]
     for i in tqdm(idx):
         data = dataset[int(i)]
         pass
-    
+
     print("Iterating over dataset")
     for entry in tqdm(dataset):
         pass
-    
-    
+
+
 if __name__ == "__main__":
     main()
