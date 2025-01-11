@@ -132,8 +132,7 @@ class UCO3DFrameDataBuilder:
     apply_alignment: bool = True
     mask_images: bool = False
     mask_depths: bool = False
-    video_capture_cache_size: int = 16
-    depth_video_fps: int = 20
+    video_capture_cache_size: int = 0
     point_cloud_cache_size: int = 32
     gaussian_splat_cache_size: int = 32
     use_cache: bool = True
