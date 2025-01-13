@@ -104,6 +104,7 @@ def _restrict_metadata_to_downloaded_files(big_metadata_file, download_folder):
 def _test_iterate_dataset(
     download_folder,
     download_modalities=None,
+    download_small_subset=False,
 ):
     modality_to_load_switch = {
         "rgb_videos": "load_images",
@@ -127,6 +128,11 @@ def _test_iterate_dataset(
                 for modality, load_switch in modality_to_load_switch.items()
             },
         },
+        set_lists_file_name=(
+            "set_lists_all-categories.sqlite"
+            if download_small_subset
+            else "set_lists_3categories-debug.sqlite"
+        ),
     )
     load_idx = [random.randint(0, len(dataset)) for i in range(20)]
     for i in load_idx:
@@ -139,6 +145,7 @@ def _run_one_download(
     download_folder,
     link_list_file,
     category_to_archives_file,
+    download_small_subset=False,
     download_super_categories=None,
     download_modalities=None,
     n_download_workers: int = 8,
@@ -180,7 +187,7 @@ def _run_one_download(
                 download_folder,
                 "--checksum_check",
                 "--clear_archives_after_unpacking",
-                # "--redownload_existing_archives",
+                "--redownload_existing_archives",
                 "--n_download_workers",
                 str(int(n_download_workers)),
                 "--n_extract_workers",
@@ -210,6 +217,9 @@ def _run_one_download(
                 download_modalities,
             )
 
+            if download_small_subset:
+                cmd.append("--download_small_subset")
+
             print(" ".join(cmd))
 
             os.makedirs(download_folder, exist_ok=True)
@@ -227,9 +237,10 @@ def _run_one_download(
     _test_iterate_dataset(
         download_folder,
         download_modalities=download_modalities,
+        download_small_subset=download_small_subset,
     )
 
-    if download_modalities is None:
+    if (download_modalities is None) and (not download_small_subset):
         # run the testing suite
         with temporary_working_directory(TEST_DIR):
             cmd = ["python", "run.py"]
@@ -287,19 +298,33 @@ def _run_one_download(
 #     n_download_workers = 64,
 #     n_extract_workers = 64,
 # )
-_run_one_download(
-    zipfiles_folder=None,
-    download_folder="/fsx-repligen/shared/datasets/uCO3D/full_download_test/",
-    category_to_archives_file=None,
-    link_list_file=None,
-    download_super_categories=None,
-    download_modalities=["metadata"],
-    big_metadata_file=None,
-    n_download_workers=64,
-    n_extract_workers=64,
-)
+# _run_one_download(
+#     zipfiles_folder=None,
+#     download_folder="/fsx-repligen/shared/datasets/uCO3D/full_download_test/",
+#     category_to_archives_file=None,
+#     link_list_file=None,
+#     download_super_categories=None,
+#     download_modalities=["metadata"],
+#     big_metadata_file=None,
+#     n_download_workers=64,
+#     n_extract_workers=64,
+# )
 # srun --partition=learn --account=repligen --qos=low --gpus-per-node=2 --cpus-per-task=64 --mem-per-cpu 10G --time=1-0 --pty /bin/zsh
 # s3://genai-transfer/shared/datasets/uCO3D/dataset_export_zip_1220_final/compressed/metadata.zip
 
 # Expected: 3645abdfa6450db31559bba7ded5ca01823a1d7d067cc83e6b5a5b17b017195a,
 # got: 603a1d7c5a54f1a8f71395686cba7de582e9b5f8461cef8bd0fcff7850b90ad5.  # the old one
+
+
+_run_one_download(
+    zipfiles_folder=None,
+    download_folder="/Users/davidnovotny/data/uco3d_examples_download_test_v2",
+    category_to_archives_file=None,
+    link_list_file=None,
+    download_small_subset=True,
+    download_super_categories=None,
+    download_modalities=None,
+    big_metadata_file=None,
+    n_download_workers=64,
+    n_extract_workers=64,
+)

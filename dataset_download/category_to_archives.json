@@ -5,6 +5,12 @@
         "file_size_bytes": 4930056836,
         "download_url": null
     },
+    "examples": {
+        "filename": "examples.zip",
+        "sha256sum": "d203f10a9debf205cc708a8429ff7c2f1d802cbc2234a2e5096003d7dda64001",
+        "file_size_bytes": 9357019517,
+        "download_url": null
+    },
     "depth_maps": {
         "animal-related_objects": {
             "part_depth_maps_0001.zip": {

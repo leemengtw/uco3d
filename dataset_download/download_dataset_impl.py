@@ -16,7 +16,7 @@ import random
 import hashlib
 import copy
 
-from typing import List, Optional, Tuple
+from typing import List, Optional
 from multiprocessing import Pool
 from multiprocessing.dummy import Pool as SerialPool
 from tqdm import tqdm
@@ -25,23 +25,27 @@ from tqdm import tqdm
 BLOCKSIZE = 65536  # for sha256 computation
 
 
+DEFAULT_DOWNLOAD_MODALITIES = [
+    "metadata",
+    # "depth_maps",   # by default we do not download depth maps!
+    "rgb_videos",
+    "mask_videos",
+    "gaussian_splats",
+    "point_clouds",
+    "sparse_point_clouds",
+    "segmented_point_clouds",
+]
+
+
 def download_dataset(
     category_to_archives_file: str,
     link_list_file: str,
     download_folder: str,
     n_download_workers: int = 4,
     n_extract_workers: int = 4,
+    download_small_subset: bool = False,
     download_super_categories: Optional[List[str]] = None,
-    download_modalities: Optional[List[str]] = [
-        "metadata",
-        # "depth_maps",   # by default we do not download depth maps!
-        "rgb_videos",
-        "mask_videos",
-        "gaussian_splats",
-        "point_clouds",
-        "sparse_point_clouds",
-        "segmented_point_clouds",
-    ],
+    download_modalities: Optional[List[str]] = DEFAULT_DOWNLOAD_MODALITIES,
     checksum_check: bool = False,
     clear_archives_after_unpacking: bool = False,
     skip_downloaded_archives: bool = True,
@@ -62,6 +66,10 @@ def download_dataset(
             for downloading the dataset files.
         n_extract_workers: The number of parallel workers
             for extracting the dataset files.
+        download_small_subset: Download only a small debug subset of 52 videos with
+            including all available modalities and supercategories.
+            As such, cannot be used together with setting
+            `download_super_categories` or `download_modalities`.
         download_super_categories: A list of super categories to download.
             If `None`, downloads all.
         download_modalities: A list of modalities to download.
@@ -75,10 +83,29 @@ def download_dataset(
             files do not match the expected ones.
     """
 
-    if not os.path.isfile(link_list_file):
+    if not os.path.isdir(download_folder):
+        raise ValueError(
+            "Please specify `download_folder` with a valid path to a target folder"
+            + " for downloading the dataset."
+            + f" {download_folder} does not exist."
+        )
+
+    if link_list_file.startswith("http"):
+        # download the link list file
+        print(f"Downloading link list file {link_list_file}.")
+        link_list_file_local = os.path.join(
+            download_folder, "uco3d_dataset_download_urls.json"
+        )
+        _download_with_progress_bar(
+            link_list_file, link_list_file_local, "uco3d_dataset_download_urls.json",
+            quiet=True,
+        )
+        link_list_file = link_list_file_local
+
+    elif not os.path.isfile(link_list_file):
         raise ValueError(
             "Please specify `link_list_file` with a valid path to a json"
-            " with zip file download links."
+            " with download links to the uco3d zip files."
         )
 
     if not os.path.isfile(category_to_archives_file):
@@ -87,12 +114,20 @@ def download_dataset(
             " with mapping between dataset categories and archive filenames."
         )
 
-    if not os.path.isdir(download_folder):
-        raise ValueError(
-            "Please specify `download_folder` with a valid path to a target folder"
-            + " for downloading the dataset."
-            + f" {download_folder} does not exist."
-        )
+    if download_small_subset:
+        if download_super_categories is not None:
+            raise ValueError(
+                "The `download_small_subset` flag cannot be used together with"
+                + " `download_super_categories`."
+            )
+        if (download_modalities is not None) and (
+            set(download_modalities) != set(DEFAULT_DOWNLOAD_MODALITIES)
+        ):
+            warnings.warn(
+                "The `download_small_subset` flag is set, but `download_modalities`"
+                + " is not None or does not match the default modalities."
+                + " The `download_modalities` flag will be ignored."
+            )
 
     # read the links file
     with open(link_list_file, "r") as f:
@@ -147,19 +182,22 @@ def download_dataset(
 
     # determine links to files we want to download
     data_links = []
-    actual_download_supercategories_modalities = set()
-    for modality, modality_links in category_to_archives.items():
-        if modality == "metadata":
-            assert isinstance(modality_links, dict)
-            _add_to_data_links(data_links, modality_links)
-            continue
-        for super_category, super_category_links in modality_links.items():
-            if _is_for_download(modality, super_category):
-                actual_download_supercategories_modalities.add(
-                    f"{modality}/{super_category}"
-                )
-                for link_name, link_data in super_category_links.items():
-                    _add_to_data_links(data_links, link_data)
+    if download_small_subset:
+        _add_to_data_links(data_links, category_to_archives["examples"])
+    else:
+        actual_download_supercategories_modalities = set()
+        for modality, modality_links in category_to_archives.items():
+            if modality == "metadata":
+                assert isinstance(modality_links, dict)
+                _add_to_data_links(data_links, modality_links)
+                continue
+            for super_category, super_category_links in modality_links.items():
+                if _is_for_download(modality, super_category):
+                    actual_download_supercategories_modalities.add(
+                        f"{modality}/{super_category}"
+                    )
+                    for link_name, link_data in super_category_links.items():
+                        _add_to_data_links(data_links, link_data)
 
     # for modality_super_category in sorted(
     #     actual_download_supercategories_modalities
@@ -300,7 +338,7 @@ def _download_file(
     return link_name, True
 
 
-def _download_with_progress_bar(url: str, fname: str, filename: str):
+def _download_with_progress_bar(url: str, fname: str, filename: str, quiet: bool = False):
     # taken from https://stackoverflow.com/a/62113293/986477
     if not url.startswith("http"):
         # url is in fact a local path, so we copy to the download folder
@@ -320,7 +358,7 @@ def _download_with_progress_bar(url: str, fname: str, filename: str):
         for datai, data in enumerate(resp.iter_content(chunk_size=1024)):
             size = file.write(data)
             bar.update(size)
-            if datai % max((max(total // 1024, 1) // 20), 1) == 0:
+            if (not quiet) and (datai % max((max(total // 1024, 1) // 20), 1) == 0):
                 print(
                     f"{filename}: Downloaded {100.0*(float(bar.n)/max(total, 1)):3.1f}%."
                 )

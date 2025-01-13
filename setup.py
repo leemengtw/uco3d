@@ -20,6 +20,7 @@ setup(
         "matplotlib",
         "plyfile",
         "h5py",
+        "av==12.0.0",
         "imageio",
         "opencv-python",
         "omegaconf",

@@ -260,14 +260,14 @@ class TestGaussiansPCL(unittest.TestCase):
                 load_gaussian_splats=False,
                 box_crop=True,
                 box_crop_context=0.3,
-            )
+            ),
         )
         seq_names = list(dataset.sequence_names())[:3]
         for seq_name in seq_names:
             self._test_visualize_pcl_reprojection_one(
                 dataset,
                 seq_name,
-                max_frames_plot=80 if output_videos else 12,
+                max_frames_plot=100 if output_videos else 12,
                 output_video=output_videos,
             )
 

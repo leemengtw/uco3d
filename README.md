@@ -43,9 +43,21 @@ Then run the download script (make sure to change `<DESTINATION_FOLDER>`):
 python dataset_download/download_dataset.py --download_folder <DESTINATION_FOLDER> --checksum_check
 ```
 
-## Download subsets of the dataset
+## Download a small subset of the dataset
+
+We allow users to download a small 52-video subset of uCO3D for preview and debugging purposes.
+The videos represent a random sample of catrgories.
+The small subset takes **~9.6 GB**, i.e. more than 1000x smaller than the full dataset.
+
+To download the small subset, run the following:
+```bash
+python dataset_download/download_dataset.py --download_small_subset --download_folder <SMALL_SUBSET_DESTINATION_FOLDER>
+```
+
+## Download specific subsets of the dataset
 
 As detailed here, we allow users to download only specific subsets of the dataset (e.g. only Gaussian Splats and RGB videos of specific object categories). This allows to greatly decrease the amount of required space.
+Note that this functionality is not supported for [downloading the small subset](#download-a-small-subset-of-the-dataset) - the small subset will always be downloaded in full.
 
 ### Downloading specific modalities
 
