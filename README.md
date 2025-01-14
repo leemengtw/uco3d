@@ -4,7 +4,7 @@
 
 # uCO3D: UnCommon Objects in 3D
 
-[[paper](TODO)] [[project page](https://uco3d.github.io)]
+[[paper](https://arxiv.org/abs/2501.07574)] [[project page](https://uco3d.github.io)]
 
 This repository contains download scripts and tooling for working with the **UnCommon Objects in 3D (uCO3D)** dataset.
 
