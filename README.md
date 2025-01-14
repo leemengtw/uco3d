@@ -373,6 +373,6 @@ If you use our dataset, please use the following citation:
 	Author = {Liu, Xingchen and Tayal, Piyush and Wang, Jianyuan and Zarzar, Jesus and Monnier, Tom and Tertikas, Konstantinos and Duan, Jiali and Toisoul, Antoine and Zhang, Jason Y. and Neverova, Natalia and Vedaldi, Andrea and Shapovalov, Roman and Novotny, David},
 	Booktitle = {arXiv},
 	Title = {UnCommon Objects in 3D},
-	Year = {2024},
+	Year = {2025},
 }
 ```
