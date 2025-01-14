@@ -10,7 +10,7 @@ This repository contains download scripts and tooling for working with the **UnC
 
 **uCO3D** contains ~170,000 turn-table videos capturing objects from the LVIS taxonomy of object categories.
 
-The dataset is described in our paper ["UnCommon Objects in 3D"](TODO).
+The dataset is described in our paper ["UnCommon Objects in 3D"](https://arxiv.org/abs/2501.07574).
 
 <center>
 <img src="./uco3d_grid.gif" width="600" alt="grid"/>
