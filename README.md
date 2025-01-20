@@ -46,7 +46,7 @@ python dataset_download/download_dataset.py --download_folder <DESTINATION_FOLDE
 ## Download a small subset of the dataset
 
 We allow users to download a small 52-video subset of uCO3D for preview and debugging purposes.
-The videos represent a random sample of catrgories.
+The videos represent a random sample of categories.
 The small subset takes **~9.6 GB**, i.e. more than 1000x smaller than the full dataset.
 
 To download the small subset, run the following:
