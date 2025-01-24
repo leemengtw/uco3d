@@ -25,5 +25,6 @@ setup(
         "opencv-python",
         "omegaconf",
         "scipy",
+        "requests",
     ],
 )

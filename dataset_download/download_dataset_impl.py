@@ -17,12 +17,23 @@ import hashlib
 import copy
 
 from typing import List, Optional
-from multiprocessing import Pool
+from multiprocessing import Pool, Lock
 from multiprocessing.dummy import Pool as SerialPool
 from tqdm import tqdm
 
+# import os
+# import json
+# import boto3  # 用於 S3 操作
+# from botocore.exceptions import NoCredentialsError
+# import requests
+
 
 BLOCKSIZE = 65536  # for sha256 computation
+lock = Lock()
+
+def ensure_permissions():
+    os.setuid(os.getuid())
+    os.setgid(os.getgid())
 
 
 DEFAULT_DOWNLOAD_MODALITIES = [
@@ -50,6 +61,7 @@ def download_dataset(
     clear_archives_after_unpacking: bool = False,
     skip_downloaded_archives: bool = True,
     crash_on_checksum_mismatch: bool = False,
+    debug = False,
 ):
     """
     Downloads and unpacks the dataset in UCO3D format.
@@ -136,6 +148,20 @@ def download_dataset(
     with open(category_to_archives_file, "r") as f:
         category_to_archives: dict = json.load(f)
 
+    if debug:
+        print("DEBUGGING")
+
+        # remove_s3_prefix("s3://mod3d-west/uco3d/_in_progress")
+
+        target_modalities = ['rgb_videos']
+        target_link_name = "part_rgb_videos_0562.zip"
+
+        links = {fname: info for fname, info in links.items() if fname == target_link_name}
+        download_modalities = target_modalities
+        category_to_archives = {k: v for k, v in category_to_archives.items() if k in target_modalities}
+        
+        print(f"{links=}")
+
     # extract possible modalities, super categories
     uco3d_modalities = set()
     uco3d_super_categories = set()
@@ -197,12 +223,16 @@ def download_dataset(
                         f"{modality}/{super_category}"
                     )
                     for link_name, link_data in super_category_links.items():
-                        _add_to_data_links(data_links, link_data)
+                        if debug:
+                            if link_name == target_link_name:
+                                _add_to_data_links(data_links, link_data)
+                        else:
+                            _add_to_data_links(data_links, link_data)
 
-    # for modality_super_category in sorted(
-    #     actual_download_supercategories_modalities
-    # ):
-    #     print(f"Downloading {modality_super_category}.")
+    for modality_super_category in sorted(
+        actual_download_supercategories_modalities
+    ):
+        print(f"Downloading {modality_super_category}.")
 
     # multiprocessing pool
     with _get_pool_fn(n_download_workers)(
@@ -236,26 +266,26 @@ def download_dataset(
                 + " Please restart the download script."
             )
 
-    print(f"Extracting {len(data_links)} dataset files ...")
-    with _get_pool_fn(n_extract_workers)(processes=n_extract_workers) as extract_pool:
-        for _ in tqdm(
-            extract_pool.imap(
-                functools.partial(
-                    _unpack_file,
-                    download_folder,
-                    clear_archives_after_unpacking,
-                ),
-                data_links,
-            ),
-            total=len(data_links),
-        ):
-            pass
+    # print(f"Extracting {len(data_links)} dataset files ...")
+    # with _get_pool_fn(n_extract_workers)(processes=n_extract_workers) as extract_pool:
+    #     for _ in tqdm(
+    #         extract_pool.imap(
+    #             functools.partial(
+    #                 _unpack_file,
+    #                 download_folder,
+    #                 clear_archives_after_unpacking,
+    #             ),
+    #             data_links,
+    #         ),
+    #         total=len(data_links),
+    #     ):
+    #         pass
 
-    # clean up the in-progress folder if empty
-    in_progress_folder = _get_in_progress_folder(download_folder)
-    if os.path.isdir(in_progress_folder) and len(os.listdir(in_progress_folder)) == 0:
-        print(f"Removing in-progress downloads folder {in_progress_folder}")
-        shutil.rmtree(in_progress_folder)
+    # # clean up the in-progress folder if empty
+    # in_progress_folder = _get_in_progress_folder(download_folder)
+    # if os.path.isdir(in_progress_folder) and len(os.listdir(in_progress_folder)) == 0:
+    #     print(f"Removing in-progress downloads folder {in_progress_folder}")
+    #     shutil.rmtree(in_progress_folder)
 
     print("Done")
 
@@ -296,6 +326,165 @@ def _unpack_file(
         os.remove(local_fl)
 
 
+import boto3
+from botocore.exceptions import NoCredentialsError, ClientError
+
+# 配置 S3
+S3_BUCKET = "mod3d-west"
+
+s3_client = boto3.client("s3")
+
+
+def move_s3_file(source_key, destination_key):
+    """
+    在 S3 中移動文件，對於大於 5GB 的文件使用多部分拷貝。
+
+    :param source_key: 原文件的 S3 key
+    :param destination_key: 目標文件的 S3 key
+    """
+    try:
+        # 檢查文件大小
+        response = s3_client.head_object(Bucket=S3_BUCKET, Key=source_key)
+        file_size = response["ContentLength"]
+
+        if file_size > 5 * 1024 * 1024 * 1024:  # 超過 5GB
+            print(f"File size {file_size} exceeds 5GB, using multipart copy...")
+            multipart_copy(source_key, destination_key)
+        else:
+            # 標準拷貝
+            print(f"Copying {source_key} to {destination_key} using standard copy...")
+            s3_client.copy_object(
+                Bucket=S3_BUCKET,
+                CopySource={"Bucket": S3_BUCKET, "Key": source_key},
+                Key=destination_key
+            )
+            print(f"Copied {source_key} to {destination_key}")
+
+        # 刪除原文件
+        print(f"Deleting original file {source_key}...")
+        s3_client.delete_object(Bucket=S3_BUCKET, Key=source_key)
+        print(f"Deleted {source_key}")
+    except NoCredentialsError:
+        print("AWS credentials not found. Please configure your AWS credentials.")
+        raise
+    except ClientError as e:
+        print(f"Error occurred: {e}")
+        print(f"{source_key=}")
+        print(f"{destination_key=}")
+        raise
+
+
+def multipart_copy(source_key, destination_key):
+    """
+    使用多部分上傳方式在 S3 中複製大於 5GB 的文件。
+
+    :param source_key: 源文件的 S3 Key
+    :param destination_key: 目標文件的 S3 Key
+    """
+    try:
+        # 獲取源文件的大小
+        response = s3_client.head_object(Bucket=S3_BUCKET, Key=source_key)
+        source_size = response["ContentLength"]
+        print(f"Source file size: {source_size} bytes")
+
+        # 初始化多部分上傳
+        multipart_upload = s3_client.create_multipart_upload(Bucket=S3_BUCKET, Key=destination_key)
+        upload_id = multipart_upload["UploadId"]
+
+        try:
+            # 設置每部分的大小（例如 500MB）
+            part_size = 500 * 1024 * 1024
+            part_number = 1
+            parts = []
+
+            for start in range(0, source_size, part_size):
+                end = min(start + part_size - 1, source_size - 1)
+                print(f"Copying bytes {start}-{end}...")
+
+                # 複製每部分
+                part = s3_client.upload_part_copy(
+                    Bucket=S3_BUCKET,
+                    Key=destination_key,
+                    CopySource={"Bucket": S3_BUCKET, "Key": source_key},
+                    CopySourceRange=f"bytes={start}-{end}",
+                    PartNumber=part_number,
+                    UploadId=upload_id,
+                )
+                parts.append({"ETag": part["CopyPartResult"]["ETag"], "PartNumber": part_number})
+                part_number += 1
+
+            # 完成多部分上傳
+            s3_client.complete_multipart_upload(
+                Bucket=S3_BUCKET,
+                Key=destination_key,
+                MultipartUpload={"Parts": parts},
+                UploadId=upload_id,
+            )
+            print(f"Successfully copied {source_key} to {destination_key} using multipart upload.")
+        except Exception as e:
+            # 如果出錯，取消多部分上傳
+            s3_client.abort_multipart_upload(Bucket=S3_BUCKET, Key=destination_key, UploadId=upload_id)
+            print(f"Multipart upload aborted due to: {e}")
+            raise
+
+    except NoCredentialsError:
+        print("AWS credentials not found. Please configure your AWS credentials.")
+        raise
+    except ClientError as e:
+        print(f"Error occurred: {e}")
+        raise
+
+
+def remove_s3_file(source_key):
+    """
+    在 S3 中移動文件。
+
+    :param source_key: 原文件的 S3 key
+    :param destination_key: 目標文件的 S3 key
+    """
+    try:
+        # 刪除原文件
+        print(f"Deleting original file {source_key}...")
+        s3_client.delete_object(Bucket=S3_BUCKET, Key=source_key)
+        print(f"Deleted {source_key}")
+    except NoCredentialsError:
+        print("AWS credentials not found. Please configure your AWS credentials.")
+    except ClientError as e:
+        print(f"Error occurred: {e}")
+        print(f"{source_key=}")
+
+
+def remove_s3_prefix(prefix):
+    try:
+        continuation_token = None
+        while True:
+            if continuation_token:
+                response = s3_client.list_objects_v2(
+                    Bucket=S3_BUCKET, Prefix=prefix, ContinuationToken=continuation_token
+                )
+            else:
+                response = s3_client.list_objects_v2(Bucket=S3_BUCKET, Prefix=prefix)
+
+            if "Contents" in response:
+                for obj in response["Contents"]:
+                    file_key = obj["Key"]
+                    print(f"Deleting file: {file_key}...")
+                    s3_client.delete_object(Bucket=S3_BUCKET, Key=file_key)
+                    print(f"Deleted {file_key}")
+
+            # 檢查是否有下一頁
+            if response.get("IsTruncated"):  # 還有下一頁
+                continuation_token = response["NextContinuationToken"]
+            else:  # 已到最後一頁
+                break
+
+        print(f"All files under prefix '{prefix}' have been deleted.")
+    except NoCredentialsError:
+        print("AWS credentials not found. Please configure your AWS credentials.")
+    except ClientError as e:
+        print(f"Error occurred: {e}")
+
+
 def _download_file(
     download_folder: str,
     checksum_check: bool,
@@ -303,13 +492,15 @@ def _download_file(
     crash_on_checksum_mismatch: bool,
     link_data: dict,
 ):
+    ensure_permissions()
+
     url = link_data["download_url"]
     link_name = link_data["filename"]
     sha256 = link_data["sha256sum"]
     local_fl_final = os.path.join(download_folder, link_name)
 
     if skip_downloaded_files and os.path.isfile(local_fl_final):
-        print(f"Skipping {local_fl_final}, already downloaded!")
+        # print(f"Skipping {local_fl_final}, already downloaded!")
         return link_name, True
 
     in_progress_folder = _get_in_progress_folder(download_folder)
@@ -317,7 +508,16 @@ def _download_file(
     local_fl = os.path.join(in_progress_folder, link_name)
 
     print(f"Downloading dataset file {link_name} ({url}) to {local_fl}.")
-    _download_with_progress_bar(url, local_fl, link_name)
+    num_max_retries = 3
+    num_tries = 0
+    success = False
+
+    while not success:
+        success = _download_with_progress_bar(url, local_fl, link_name)
+        num_tries += 1
+        if num_tries >= num_max_retries:
+            return link_name, False
+
     if checksum_check:
         print(f"Checking SHA256 for {local_fl}.")
         sha256_local = _sha256_file(local_fl)
@@ -332,10 +532,49 @@ def _download_file(
                 raise ValueError(msg)
             else:
                 warnings.warn(msg)
+
+            s3_fl = os.path.abspath(local_fl).replace("/admin/home-meng/s3_mount/mod3d-west/", "")
+            remove_s3_file(s3_fl)
+
             return link_name, False
 
-    os.rename(local_fl, local_fl_final)
+    # os.rename(local_fl, local_fl_final)
+    # shutil.move(local_fl, local_fl_final)
+
+    # /admin/home-meng/s3_mount/mod3d-west/uco3d/_in_progress/part_gaussian_splats_0001.zip
+    # /admin/home-meng/s3_mount/mod3d-west/uco3d/part_gaussian_splats_0001.zip
+    s3_fl = os.path.abspath(local_fl).replace("/admin/home-meng/s3_mount/mod3d-west/", "")
+    s3_fl_final = os.path.abspath(local_fl_final).replace("/admin/home-meng/s3_mount/mod3d-west/", "")
+
+    # print(f"{s3_fl=}")
+    # print(f"{s3_fl_final=}")
+    move_s3_file(s3_fl, s3_fl_final)
+
     return link_name, True
+
+
+def write_file_locally_and_move(fname, resp, total, quiet, filename):
+
+    temp_path = f"/tmp/{os.path.basename(fname)}"
+
+    with open(temp_path, "wb") as file, tqdm(
+            desc=temp_path,
+            total=total,
+            unit="iB",
+            unit_scale=True,
+            unit_divisor=1024,
+        ) as bar:
+            for datai, data in enumerate(resp.iter_content(chunk_size=1024)):
+                size = file.write(data)
+                bar.update(size)
+                if (not quiet) and (datai % max((max(total // 1024, 1) // 20), 1) == 0):
+                    print(
+                        f"{filename}: Downloaded {100.0*(float(bar.n)/max(total, 1)):3.1f}%."
+                    )
+                    print(bar)
+
+    print(f"Copy {temp_path} to {fname}")
+    shutil.move(temp_path, fname)
 
 
 def _download_with_progress_bar(url: str, fname: str, filename: str, quiet: bool = False):
@@ -348,18 +587,32 @@ def _download_with_progress_bar(url: str, fname: str, filename: str, quiet: bool
     resp = requests.get(url, stream=True)
     print(url)
     total = int(resp.headers.get("content-length", 0))
-    with open(fname, "wb") as file, tqdm(
-        desc=fname,
-        total=total,
-        unit="iB",
-        unit_scale=True,
-        unit_divisor=1024,
-    ) as bar:
-        for datai, data in enumerate(resp.iter_content(chunk_size=1024)):
-            size = file.write(data)
-            bar.update(size)
-            if (not quiet) and (datai % max((max(total // 1024, 1) // 20), 1) == 0):
-                print(
-                    f"{filename}: Downloaded {100.0*(float(bar.n)/max(total, 1)):3.1f}%."
-                )
-                print(bar)
+    # write_file_locally_and_move(fname, resp=resp, total=total, quiet=quiet, filename=filename)
+
+    try:
+        with open(fname, "wb") as file, tqdm(
+            desc=fname,
+            total=total,
+            unit="iB",
+            unit_scale=True,
+            unit_divisor=1024,
+        ) as bar:
+            for datai, data in enumerate(resp.iter_content(chunk_size=1024)):
+                size = file.write(data)
+                bar.update(size)
+                if (not quiet) and (datai % max((max(total // 1024, 1) // 20), 1) == 0):
+                    print(
+                        f"{filename}: Downloaded {100.0*(float(bar.n)/max(total, 1)):3.1f}%."
+                    )
+                    print(bar)
+    except Exception as e:
+        print(f"Encountered issue when downloading {fname}. probably not able to update partial downloaded file. remove existing file if present")
+        print(e)
+
+        s3_fl = os.path.abspath(fname).replace("/admin/home-meng/s3_mount/mod3d-west/", "")
+        remove_s3_file(s3_fl)
+
+        return False
+    
+    return True
+
