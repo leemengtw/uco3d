@@ -15,6 +15,8 @@ import time
 import random
 import hashlib
 import copy
+import subprocess
+import traceback
 
 from typing import List, Optional
 from multiprocessing import Pool, Lock
@@ -47,6 +49,29 @@ DEFAULT_DOWNLOAD_MODALITIES = [
     "segmented_point_clouds",
 ]
 
+from boto3.s3.transfer import TransferConfig
+import boto3
+
+s3_client = boto3.client("s3")
+
+config = TransferConfig(multipart_threshold=1024 * 25,
+                        multipart_chunksize=1024 * 25,
+                        use_threads=True)
+
+def upload_to_s3(
+    local_file_path, 
+    bucket_name="mod3d-west"
+):
+
+    try:
+        s3_key = os.path.join("uco3d", os.path.basename(local_file_path))
+    
+        print(f"Uploading {local_file_path} to s3://{bucket_name}/{s3_key}")
+        s3_client.upload_file(local_file_path, bucket_name, s3_key, Config=config)
+        print(f"File successfully uploaded to s3://{bucket_name}/{s3_key}")
+    except Exception as e:
+        print(f"Error uploading file: {e}")
+
 
 def download_dataset(
     category_to_archives_file: str,
@@ -62,6 +87,7 @@ def download_dataset(
     skip_downloaded_archives: bool = True,
     crash_on_checksum_mismatch: bool = False,
     debug = False,
+    existing_s3_files_txt_file_path = None,
 ):
     """
     Downloads and unpacks the dataset in UCO3D format.
@@ -154,7 +180,7 @@ def download_dataset(
         # remove_s3_prefix("s3://mod3d-west/uco3d/_in_progress")
 
         target_modalities = ['rgb_videos']
-        target_link_name = "part_rgb_videos_0562.zip"
+        target_link_name = "part_rgb_videos_0460.zip"
 
         links = {fname: info for fname, info in links.items() if fname == target_link_name}
         download_modalities = target_modalities
@@ -234,6 +260,29 @@ def download_dataset(
     ):
         print(f"Downloading {modality_super_category}.")
 
+
+    # skip existing s3 files
+    existing_link_names = []
+    if existing_s3_files_txt_file_path:
+        
+        command = ["aws", "s3", "ls", "s3://mod3d-west/uco3d/"]
+
+        with open(existing_s3_files_txt_file_path, "w") as file:
+            subprocess.run(command, stdout=file, check=True)
+
+        with open(existing_s3_files_txt_file_path, "r") as fp:
+            lines = fp.readlines()
+
+        for line in lines:
+            link_names = line.split(" ")[-1].strip()
+            existing_link_names.append(link_names)
+            print(f"{link_names} already available on S3. skip")
+
+    print(f"Skip {len(existing_link_names)} files")
+    data_links = [d for d in data_links if not d["filename"] in existing_link_names]
+    print(f"{len(data_links)} files waiting to be downloaded")
+
+
     # multiprocessing pool
     with _get_pool_fn(n_download_workers)(
         processes=n_download_workers
@@ -281,11 +330,11 @@ def download_dataset(
     #     ):
     #         pass
 
-    # # clean up the in-progress folder if empty
-    # in_progress_folder = _get_in_progress_folder(download_folder)
-    # if os.path.isdir(in_progress_folder) and len(os.listdir(in_progress_folder)) == 0:
-    #     print(f"Removing in-progress downloads folder {in_progress_folder}")
-    #     shutil.rmtree(in_progress_folder)
+    # clean up the in-progress folder if empty
+    in_progress_folder = _get_in_progress_folder(download_folder)
+    if os.path.isdir(in_progress_folder) and len(os.listdir(in_progress_folder)) == 0:
+        print(f"Removing in-progress downloads folder {in_progress_folder}")
+        shutil.rmtree(in_progress_folder)
 
     print("Done")
 
@@ -361,9 +410,9 @@ def move_s3_file(source_key, destination_key):
             print(f"Copied {source_key} to {destination_key}")
 
         # 刪除原文件
-        print(f"Deleting original file {source_key}...")
-        s3_client.delete_object(Bucket=S3_BUCKET, Key=source_key)
-        print(f"Deleted {source_key}")
+        # print(f"Deleting original file {source_key}...")
+        # s3_client.delete_object(Bucket=S3_BUCKET, Key=source_key)
+        # print(f"Deleted {source_key}")
     except NoCredentialsError:
         print("AWS credentials not found. Please configure your AWS credentials.")
         raise
@@ -435,23 +484,23 @@ def multipart_copy(source_key, destination_key):
         raise
 
 
-def remove_s3_file(source_key):
-    """
-    在 S3 中移動文件。
+# def remove_s3_file(source_key):
+#     """
+#     在 S3 中移動文件。
 
-    :param source_key: 原文件的 S3 key
-    :param destination_key: 目標文件的 S3 key
-    """
-    try:
-        # 刪除原文件
-        print(f"Deleting original file {source_key}...")
-        s3_client.delete_object(Bucket=S3_BUCKET, Key=source_key)
-        print(f"Deleted {source_key}")
-    except NoCredentialsError:
-        print("AWS credentials not found. Please configure your AWS credentials.")
-    except ClientError as e:
-        print(f"Error occurred: {e}")
-        print(f"{source_key=}")
+#     :param source_key: 原文件的 S3 key
+#     :param destination_key: 目標文件的 S3 key
+#     """
+#     try:
+#         # 刪除原文件
+#         print(f"Deleting original file {source_key}...")
+#         s3_client.delete_object(Bucket=S3_BUCKET, Key=source_key)
+#         print(f"Deleted {source_key}")
+#     except NoCredentialsError:
+#         print("AWS credentials not found. Please configure your AWS credentials.")
+#     except ClientError as e:
+#         print(f"Error occurred: {e}")
+#         print(f"{source_key=}")
 
 
 def remove_s3_prefix(prefix):
@@ -499,9 +548,11 @@ def _download_file(
     sha256 = link_data["sha256sum"]
     local_fl_final = os.path.join(download_folder, link_name)
 
-    if skip_downloaded_files and os.path.isfile(local_fl_final):
-        # print(f"Skipping {local_fl_final}, already downloaded!")
-        return link_name, True
+    if skip_downloaded_files:
+        if os.path.isfile(local_fl_final):
+            print(f"Skipping {local_fl_final}, already downloaded!")
+            return link_name, True
+        # elif 
 
     in_progress_folder = _get_in_progress_folder(download_folder)
     os.makedirs(in_progress_folder, exist_ok=True)
@@ -533,22 +584,31 @@ def _download_file(
             else:
                 warnings.warn(msg)
 
-            s3_fl = os.path.abspath(local_fl).replace("/admin/home-meng/s3_mount/mod3d-west/", "")
-            remove_s3_file(s3_fl)
+            # s3_fl = os.path.abspath(slocal_fl).replace("/admin/home-meng/s3_mount/mod3d-west/", "")
+            # remove_s3_file(s3_fl)
 
             return link_name, False
+        
+    os.rename(local_fl, local_fl_final)
 
-    # os.rename(local_fl, local_fl_final)
+    upload_to_s3(local_fl_final)
+
+    # try:
+    #     os.rename(local_fl, local_fl_final)
+    # except FileNotFoundError:
+    #     print(f"{local_fl} not available yet, skipped")
+    #     return link_name, False
+
     # shutil.move(local_fl, local_fl_final)
 
     # /admin/home-meng/s3_mount/mod3d-west/uco3d/_in_progress/part_gaussian_splats_0001.zip
     # /admin/home-meng/s3_mount/mod3d-west/uco3d/part_gaussian_splats_0001.zip
-    s3_fl = os.path.abspath(local_fl).replace("/admin/home-meng/s3_mount/mod3d-west/", "")
-    s3_fl_final = os.path.abspath(local_fl_final).replace("/admin/home-meng/s3_mount/mod3d-west/", "")
+    # s3_fl = os.path.abspath(local_fl).replace("/admin/home-meng/s3_mount/mod3d-west/", "")
+    # s3_fl_final = os.path.abspath(local_fl_final).replace("/admin/home-meng/s3_mount/mod3d-west/", "")
 
     # print(f"{s3_fl=}")
     # print(f"{s3_fl_final=}")
-    move_s3_file(s3_fl, s3_fl_final)
+    # move_s3_file(s3_fl, s3_fl_final)
 
     return link_name, True
 
@@ -607,10 +667,11 @@ def _download_with_progress_bar(url: str, fname: str, filename: str, quiet: bool
                     print(bar)
     except Exception as e:
         print(f"Encountered issue when downloading {fname}. probably not able to update partial downloaded file. remove existing file if present")
-        print(e)
+        print(traceback.format_exc())
+        print()
 
-        s3_fl = os.path.abspath(fname).replace("/admin/home-meng/s3_mount/mod3d-west/", "")
-        remove_s3_file(s3_fl)
+        # s3_fl = os.path.abspath(fname).replace("/admin/home-meng/s3_mount/mod3d-west/", "")
+        # remove_s3_file(s3_fl)
 
         return False
     
